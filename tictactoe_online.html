@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オンライン三目並べ (高機能版)</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif; background-color: #f0f2f5; display: flex;
+            justify-content: center; align-items: center; min-height: 100vh; margin: 0; color: #333; padding: 20px 0;
+        }
+        .container {
+            text-align: center; background-color: white; padding: 30px 40px;
+            border-radius: 16px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); width: 90%; max-width: 500px;
+        }
+        h1 { font-size: 2.2em; color: #1e3a8a; margin-bottom: 25px; }
+        .section { margin-bottom: 25px; border-top: 1px solid #e5e7eb; padding-top: 25px; }
+        .section:first-child { border-top: none; padding-top: 0; }
+        .section h2 { font-size: 1.5em; margin-bottom: 15px; color: #374151; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group select, .form-group input[type="text"] {
+            width: 100%; font-size: 1.1em; padding: 10px; border-radius: 8px;
+            border: 2px solid #ccc; box-sizing: border-box;
+        }
+        .radio-group label { margin-right: 15px; }
+        button {
+            background-color: #1e3a8a; color: white; border: none; padding: 12px 24px;
+            font-size: 1.1em; border-radius: 8px; cursor: pointer; transition: background-color 0.3s; width: 100%;
+        }
+        button:hover { background-color: #1d4ed8; }
+        button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        button.secondary { background-color: #4b5563; }
+        button.secondary:hover { background-color: #374151; }
+        #roomCreatedInfo { margin-top: 20px; background-color: #eef2ff; padding: 15px; border-radius: 8px; display: none; }
+        #roomIdDisplay { font-size: 1.2em; font-weight: bold; color: #1e3a8a; word-break: break-all; margin-bottom: 10px; }
+
+        #gameScreen { display: none; }
+        #board {
+            display: inline-grid; grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px); gap: 5px; margin: 20px auto;
+        }
+        .cell {
+            width: 100px; height: 100px; background-color: #dbeafe; border: 2px solid #93c5fd;
+            border-radius: 8px; display: flex; justify-content: center; align-items: center;
+            font-size: 3em; font-weight: bold; cursor: pointer; transition: background-color 0.3s;
+        }
+        .cell.replay, .cell.spectator { cursor: default; }
+        .cell.x { color: #ef4444; } .cell.o { color: #3b82f6; }
+        .winning-cell { background-color: #fde047; }
+        #gameInfo, #status { font-size: 1.2em; margin-bottom: 10px; min-height: 1.5em; }
+        #timers { display: flex; justify-content: space-around; font-size: 1.3em; font-weight: bold; margin-bottom: 15px; }
+        .timer-active { color: #dc2626; }
+        #historyControls { display: flex; justify-content: center; align-items: center; margin-top: 15px; gap: 15px; }
+        #historyControls button { width: auto; padding: 8px 16px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- ホーム画面 -->
+    <div id="homeScreen">
+        <h1>オンライン三目並べ</h1>
+        <div id="mainMenu">
+            <div class="section">
+                <h2>対戦する</h2>
+                <div id="createJoinToggle">
+                    <div id="createForm">
+                        <h3>部屋を新しく作る</h3>
+                        <div class="form-group"><label><input type="checkbox" id="timerCheckbox" checked> 対局時計を使う</label></div>
+                        <div class="form-group">
+                            <label for="timeSelect">持ち時間</label>
+                            <select id="timeSelect">
+                                <option value="30">30秒</option><option value="60" selected>1分</option>
+                                <option value="180">3分</option><option value="300">5分</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>あなたの手番</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="turn" value="X"> 先手(X)</label>
+                                <label><input type="radio" name="turn" value="O"> 後手(O)</label>
+                                <label><input type="radio" name="turn" value="random" checked> ランダム</label>
+                            </div>
+                        </div>
+                        <button id="createRoomButton">部屋を作成</button>
+                    </div>
+                    <div style="margin: 20px 0; border-top: 1px solid #e5e7eb;"></div>
+                    <div id="joinForm">
+                        <h3>部屋に参加する</h3>
+                        <div class="form-group">
+                            <label for="roomIdInput">部屋ID</label>
+                            <input type="text" id="roomIdInput" placeholder="相手から教わったIDを入力">
+                        </div>
+                        <button id="joinRoomButton">部屋に参加</button>
+                        <p id="joinError" style="color: red;"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>棋譜を再生する</h2>
+                <div class="form-group">
+                    <label for="kifuIdInput">部屋ID (UUID)</label>
+                    <input type="text" id="kifuIdInput" placeholder="保存された対局のIDを入力">
+                </div>
+                <button id="replayKifuButton">棋譜を再生</button>
+                <p id="replayError" style="color: red;"></p>
+            </div>
+
+            <div class="section">
+                <h2>観戦する</h2>
+                <div class="form-group">
+                    <label for="spectateIdInput">部屋ID (UUID)</label>
+                    <input type="text" id="spectateIdInput" placeholder="観戦したい対局のIDを入力">
+                </div>
+                <button id="spectateButton">試合を観戦</button>
+                <p id="spectateError" style="color: red;"></p>
+            </div>
+        </div>
+        
+        <div id="waitingScreen" style="display: none;">
+            <div class="section">
+                <h2>部屋を作成しました</h2>
+                <p>IDを対戦相手に教えて、参加を待ってください。</p>
+                <p id="waitingRoomIdDisplay" style="font-size: 1.2em; font-weight: bold; color: #1e3a8a; word-break: break-all; margin-bottom: 10px;"></p>
+                <button id="waitingCopyButton" class="secondary">IDをコピー</button>
+                <p style="margin-top: 15px;">対戦相手が参加すると自動的にゲームが始まります...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ゲーム画面 -->
+    <div id="gameScreen">
+        <h1 id="roomTitle"></h1>
+        <div id="timers">
+            <p id="timerLabelX">あなた: <span id="myTimer">--:--</span></p>
+            <p id="timerLabelO">相手: <span id="opponentTimer">--:--</span></p>
+        </div>
+        <p id="gameInfo"></p>
+        <p id="status"></p>
+        <div id="board"></div>
+        <div id="historyControls">
+            <button id="prevMoveButton">＜戻る</button>
+            <span id="moveCounter"></span>
+            <button id="nextMoveButton">次へ＞</button>
+        </div>
+        <button id="leaveButton" style="margin-top: 20px;">部屋から退出</button>
+    </div>
+</div>
+
+<!-- Firebase SDK の読み込み -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+    // --- ここにFirebaseプロジェクトの設定を貼り付けてください ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyAMdH3R86o5YsrrujejfTqfgAtFGJRf1dI",
+        authDomain: "tictactoe-online-6ae58.firebaseapp.com",
+        databaseURL: "https://tictactoe-online-6ae58-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "tictactoe-online-6ae58",
+        storageBucket: "tictactoe-online-6ae58.firebasestorage.app",
+        messagingSenderId: "645832014330",
+        appId: "1:645832014330:web:efaa0bfbf7b691666c4c43",
+        measurementId: "G-MSR38ECZZZ"
+    };
+
+    // ---------------------------------------------------------
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // --- DOM要素の取得 ---
+    const homeScreen = document.getElementById('homeScreen');
+    const mainMenu = document.getElementById('mainMenu');
+    const waitingScreen = document.getElementById('waitingScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    const boardElement = document.getElementById('board');
+    const statusElement = document.getElementById('status');
+    const leaveButton = document.getElementById('leaveButton');
+    const gameInfo = document.getElementById('gameInfo');
+    const timerLabelX = document.getElementById('timerLabelX');
+    const timerLabelO = document.getElementById('timerLabelO');
+    const myTimerDisplay = document.getElementById('myTimer');
+    const opponentTimerDisplay = document.getElementById('opponentTimer');
+    const prevMoveButton = document.getElementById('prevMoveButton');
+    const nextMoveButton = document.getElementById('nextMoveButton');
+    const moveCounter = document.getElementById('moveCounter');
+    
+    // --- グローバル変数 ---
+    let myPlayerSymbol = null;
+    let currentRoomId = null;
+    let roomRef = null;
+    let playerRef = null;
+    let timerInterval = null;
+    const cells = [];
+    let historyViewIndex = -1;
+    let currentMoveHistory = [];
+    let isLive = true;
+    let isReplayMode = false;
+    let isSpectatorMode = false;
+    let currentRoomData = null;
+
+    // --- 部屋作成処理 ---
+    function createRoom() {
+        const newRoomId = crypto.randomUUID();
+        currentRoomId = newRoomId;
+        roomRef = database.ref('rooms/' + currentRoomId);
+
+        const timerEnabled = document.getElementById('timerCheckbox').checked;
+        const timeLimitSeconds = parseInt(document.getElementById('timeSelect').value);
+        let creatorSymbolPref = document.querySelector('input[name="turn"]:checked').value;
+        
+        let creatorSymbol = (creatorSymbolPref === 'random') ? (Math.random() < 0.5 ? 'X' : 'O') : creatorSymbolPref;
+        myPlayerSymbol = creatorSymbol;
+
+        playerRef = roomRef.child('players').child(creatorSymbol).push();
+        playerRef.onDisconnect().remove();
+
+        const initialTime = timeLimitSeconds * 1000;
+        roomRef.set({
+            settings: { timerEnabled, timeLimitSeconds },
+            players: { [creatorSymbol]: { [playerRef.key]: true } },
+            moveHistory: [ { boardState: Array(9).fill(''), remainingTimes: { X: initialTime, O: initialTime } } ],
+            currentPlayer: 'X',
+            gameActive: true,
+            winner: null,
+            lastMoveTimestamp: firebase.database.ServerValue.TIMESTAMP,
+            remainingTimes: { X: initialTime, O: initialTime }
+        });
+
+        mainMenu.style.display = 'none';
+        document.getElementById('waitingRoomIdDisplay').textContent = newRoomId;
+        waitingScreen.style.display = 'block';
+        document.getElementById('waitingCopyButton').addEventListener('click', (event) => copyRoomId(newRoomId, event));
+        
+        startGame();
+    }
+    
+    // --- 部屋参加処理 ---
+    function joinRoom() {
+        const roomId = document.getElementById('roomIdInput').value.trim();
+        const joinError = document.getElementById('joinError');
+        if (!roomId) { joinError.textContent = '部屋IDを入力してください。'; return; }
+        currentRoomId = roomId;
+        roomRef = database.ref('rooms/' + currentRoomId);
+
+        roomRef.once('value', snapshot => {
+            const roomData = snapshot.val();
+            if (!roomData) { joinError.textContent = '指定された部屋は存在しません。'; return; }
+            if (Object.keys(roomData.players).length >= 2) { joinError.textContent = 'この部屋は満員です。'; return; }
+
+            myPlayerSymbol = roomData.players.X ? 'O' : 'X';
+            playerRef = roomRef.child('players').child(myPlayerSymbol).push();
+            playerRef.onDisconnect().remove();
+            roomRef.child('players').child(myPlayerSymbol).child(playerRef.key).set(true);
+            
+            // 修正: 参加者のみ、ここで画面遷移
+            homeScreen.style.display = 'none';
+            gameScreen.style.display = 'block';
+            startGame();
+        });
+    }
+
+    // --- ゲーム開始処理 ---
+    function startGame() {
+        // 修正: この関数からは直接の画面遷移ロジックを削除
+        if (!isSpectatorMode && !isReplayMode) {
+            gameInfo.textContent = `あなたはプレイヤー ${myPlayerSymbol} です。`;
+        }
+
+        boardElement.innerHTML = ''; cells.length = 0;
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell'); cell.dataset.index = i;
+            cell.addEventListener('click', handleCellClick);
+            boardElement.appendChild(cell); cells.push(cell);
+        }
+
+        roomRef.on('value', snapshot => {
+            const roomData = snapshot.val();
+            currentRoomData = roomData;
+            if (roomData) {
+                // 修正: 待機画面からゲーム画面への遷移を、このリスナー内で管理
+                if (roomData.players.X && roomData.players.O && waitingScreen.style.display === 'block') {
+                    waitingScreen.style.display = 'none';
+                    gameScreen.style.display = 'block';
+                }
+                updateUI(roomData);
+            } else {
+                if (gameScreen.style.display === 'block' && !isReplayMode && !isSpectatorMode) {
+                    alert("部屋が削除されました。"); window.location.reload();
+                }
+            }
+        });
+    }
+
+    // --- 棋譜の保存処理 ---
+    function archiveGame(data, roomId) {
+        if (data && data.moveHistory && data.moveHistory.length > 1) {
+            database.ref('kifu/' + roomId).set(data);
+        }
+    }
+
+    // --- UI更新処理 ---
+    function updateUI(data) {
+        if (myPlayerSymbol && data.gameActive) {
+            const opponentSymbol = myPlayerSymbol === 'X' ? 'O' : 'X';
+            if (data.players[myPlayerSymbol] && !data.players[opponentSymbol] && data.moveHistory.length > 1) {
+                if (!data.winner) {
+                    const finalData = { ...data, winner: myPlayerSymbol, gameActive: false, reason: 'disconnect' };
+                    archiveGame(finalData, currentRoomId);
+                    if(roomRef) roomRef.remove();
+                }
+                return;
+            }
+        }
+
+        currentMoveHistory = data.moveHistory;
+        if(isLive) historyViewIndex = currentMoveHistory.length - 1;
+        
+        displayBoardState(historyViewIndex);
+
+        if (data.winner) {
+            statusElement.textContent = data.reason === 'disconnect' ? '相手が退出したため、あなたの勝利です！'
+                : (data.reason === 'timeout' ? `プレイヤー ${data.winner} の時間切れによる勝利です！`
+                : `プレイヤー ${data.winner} の勝利です！`);
+        } else if (!data.gameActive) {
+            statusElement.textContent = '引き分けです！';
+        } else {
+            statusElement.textContent = data.players.X && data.players.O ? `次のプレイヤー: ${data.currentPlayer}` : '対戦相手の参加を待っています...';
+        }
+        
+        updateTimerDisplay(data);
+    }
+    
+    // --- 盤面表示処理 ---
+    function displayBoardState(index) {
+        if (index < 0 || !currentMoveHistory || index >= currentMoveHistory.length) return;
+        const moveData = currentMoveHistory[index];
+        const boardState = moveData.boardState;
+
+        boardState.forEach((value, i) => {
+            cells[i].textContent = value;
+            cells[i].className = 'cell';
+            if(value) cells[i].classList.add(value.toLowerCase());
+            if(isReplayMode) cells[i].classList.add('replay');
+            if(isSpectatorMode) cells[i].classList.add('spectator');
+        });
+
+        const totalMoves = currentMoveHistory.length - 1;
+        moveCounter.textContent = `${index} / ${totalMoves} 手目`;
+        prevMoveButton.disabled = (index === 0);
+        nextMoveButton.disabled = (index === totalMoves);
+        isLive = (index === totalMoves);
+
+        if (isReplayMode && moveData.remainingTimes) {
+            displayReplayTimers(moveData);
+        }
+
+        if (isLive) {
+            const latestData = currentRoomData || currentMoveHistory.at(-1);
+            if (latestData.winner && latestData.winningLine) {
+                latestData.winningLine.forEach(i => cells[i].classList.add('winning-cell'));
+            }
+        }
+    }
+
+    // --- タイマー表示処理 ---
+    function updateTimerDisplay(data) {
+        if (isReplayMode) return;
+        if (!data.settings.timerEnabled) { document.getElementById('timers').style.display = 'none'; return; }
+        else { document.getElementById('timers').style.display = 'flex'; }
+        
+        clearInterval(timerInterval);
+        const formatTime = (ms) => {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60); const seconds = totalSeconds % 60;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        };
+        const updateDisplay = () => {
+            const now = Date.now();
+            const elapsed = now - data.lastMoveTimestamp;
+            let remainingX = data.remainingTimes.X, remainingO = data.remainingTimes.O;
+            if (data.gameActive && data.players.X && data.players.O) {
+                if (data.currentPlayer === 'X') remainingX -= elapsed; else remainingO -= elapsed;
+            }
+            if (remainingX < 0) remainingX = 0; if (remainingO < 0) remainingO = 0;
+
+            if (isSpectatorMode) {
+                myTimerDisplay.textContent = formatTime(remainingX);
+                opponentTimerDisplay.textContent = formatTime(remainingO);
+                myTimerDisplay.classList.toggle('timer-active', data.gameActive && data.currentPlayer === 'X');
+                opponentTimerDisplay.classList.toggle('timer-active', data.gameActive && data.currentPlayer === 'O');
+            } else {
+                const myTime = (myPlayerSymbol === 'X') ? remainingX : remainingO;
+                const opponentTime = (myPlayerSymbol === 'X') ? remainingO : remainingX;
+                myTimerDisplay.textContent = formatTime(myTime);
+                opponentTimerDisplay.textContent = formatTime(opponentTime);
+                myTimerDisplay.classList.toggle('timer-active', data.gameActive && data.currentPlayer === myPlayerSymbol);
+                opponentTimerDisplay.classList.toggle('timer-active', data.gameActive && data.currentPlayer !== myPlayerSymbol);
+                
+                if (myTime <= 0 && data.gameActive && data.currentPlayer === myPlayerSymbol) {
+                    clearInterval(timerInterval);
+                    const opponentSymbol = myPlayerSymbol === 'X' ? 'O' : 'X';
+                    if (roomRef) {
+                        const finalData = { ...currentRoomData, winner: opponentSymbol, gameActive: false, reason: 'timeout' };
+                        archiveGame(finalData, currentRoomId);
+                        roomRef.update({ winner: opponentSymbol, gameActive: false, reason: 'timeout' });
+                    }
+                }
+            }
+        };
+        updateDisplay();
+        if(data.gameActive && data.players.X && data.players.O) timerInterval = setInterval(updateDisplay, 500);
+    }
+
+    function displayReplayTimers(moveData) {
+         const formatTime = (ms) => {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60); const seconds = totalSeconds % 60;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        };
+        timerLabelX.textContent = `X: `; myTimerDisplay.textContent = formatTime(moveData.remainingTimes.X); timerLabelX.appendChild(myTimerDisplay);
+        timerLabelO.textContent = `O: `; opponentTimerDisplay.textContent = formatTime(moveData.remainingTimes.O); timerLabelO.appendChild(opponentTimerDisplay);
+        myTimerDisplay.classList.remove('timer-active'); opponentTimerDisplay.classList.remove('timer-active');
+    }
+
+    // --- マスがクリックされたときの処理 ---
+    function handleCellClick(event) {
+        if (!isLive || isReplayMode || isSpectatorMode) return;
+        const clickedCellIndex = parseInt(event.target.dataset.index);
+
+        roomRef.once('value', snapshot => {
+            const roomData = snapshot.val();
+            if (!roomData || !roomData.players.X || !roomData.players.O) return;
+            if (roomData.currentPlayer === myPlayerSymbol && roomData.moveHistory.at(-1).boardState[clickedCellIndex] === '' && roomData.gameActive) {
+                const elapsed = Date.now() - roomData.lastMoveTimestamp;
+                const newRemainingTimes = { ...roomData.remainingTimes };
+                newRemainingTimes[myPlayerSymbol] -= elapsed;
+                
+                const lastBoardState = roomData.moveHistory.at(-1).boardState;
+                const newBoardState = [...lastBoardState]; newBoardState[clickedCellIndex] = myPlayerSymbol;
+                const newMoveHistory = [...roomData.moveHistory, { boardState: newBoardState, remainingTimes: newRemainingTimes }];
+                const result = checkResult(newBoardState);
+                const isGameOver = !result.gameActive;
+
+                roomRef.update({
+                    moveHistory: newMoveHistory, currentPlayer: myPlayerSymbol === 'X' ? 'O' : 'X',
+                    gameActive: result.gameActive, winner: result.winner, winningLine: result.winningLine || null,
+                    lastMoveTimestamp: firebase.database.ServerValue.TIMESTAMP, remainingTimes: newRemainingTimes
+                }).then(() => {
+                    if (isGameOver) {
+                        archiveGame({ ...roomData, ...result, moveHistory: newMoveHistory, remainingTimes: newRemainingTimes }, currentRoomId);
+                        roomRef.remove();
+                    }
+                });
+            }
+        });
+    }
+    
+    // --- 勝敗チェックロジック ---
+    function checkResult(boardState) {
+        const winningConditions = [ [0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6] ];
+        let winner = null, winningLine = [];
+        for (const c of winningConditions) {
+            if (boardState[c[0]] && boardState[c[0]] === boardState[c[1]] && boardState[c[0]] === boardState[c[2]]) {
+                winner = boardState[c[0]]; winningLine = c; break;
+            }
+        }
+        const isDraw = !winner && !boardState.includes('');
+        return { winner, winningLine, gameActive: !winner && !isDraw };
+    }
+
+    // --- 棋譜再生・観戦処理 ---
+    function startReplay(kifuData) {
+        isReplayMode = true;
+        homeScreen.style.display = 'none'; gameScreen.style.display = 'block';
+        gameInfo.textContent = `棋譜再生モード`;
+        boardElement.innerHTML = ''; cells.length = 0;
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell', 'replay'); cell.dataset.index = i;
+            boardElement.appendChild(cell); cells.push(cell);
+        }
+        currentMoveHistory = kifuData.moveHistory;
+        historyViewIndex = 0;
+        displayBoardState(historyViewIndex);
+        statusElement.textContent = kifuData.winner ? `結果: プレイヤー ${kifuData.winner} の勝利` : `結果: 引き分け`;
+        document.getElementById('timers').style.display = kifuData.settings.timerEnabled ? 'flex' : 'none';
+        leaveButton.textContent = 'ホームに戻る';
+    }
+
+    function startSpectate(roomId) {
+        isSpectatorMode = true;
+        currentRoomId = roomId;
+        roomRef = database.ref('rooms/' + currentRoomId);
+
+        homeScreen.style.display = 'none'; gameScreen.style.display = 'block';
+        gameInfo.textContent = '観戦モード';
+        timerLabelX.textContent = 'プレイヤー X: '; timerLabelX.appendChild(myTimerDisplay);
+        timerLabelO.textContent = 'プレイヤー O: '; timerLabelO.appendChild(opponentTimerDisplay);
+        
+        boardElement.innerHTML = ''; cells.length = 0;
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell', 'spectator'); cell.dataset.index = i;
+            boardElement.appendChild(cell); cells.push(cell);
+        }
+        leaveButton.textContent = 'ホームに戻る';
+
+        roomRef.on('value', snapshot => {
+            const data = snapshot.val();
+            currentRoomData = data;
+            if (data) {
+                updateUI(data);
+            } else {
+                alert("観戦していた対局が終了しました。"); window.location.reload();
+            }
+        });
+    }
+
+    // --- 各種ボタンイベント ---
+    document.getElementById('createRoomButton').addEventListener('click', createRoom);
+    document.getElementById('joinRoomButton').addEventListener('click', joinRoom);
+    document.getElementById('replayKifuButton').addEventListener('click', () => {
+        const kifuIdInput = document.getElementById('kifuIdInput');
+        const replayError = document.getElementById('replayError');
+        const kifuId = kifuIdInput.value.trim();
+        if (!kifuId) { replayError.textContent = 'IDを入力してください。'; return; }
+        database.ref('kifu/' + kifuId).once('value', snapshot => {
+            const kifuData = snapshot.val();
+            if (!kifuData) { replayError.textContent = '指定された棋譜は見つかりませんでした。'; return; }
+            startReplay(kifuData);
+        });
+    });
+    document.getElementById('spectateButton').addEventListener('click', () => {
+        const spectateIdInput = document.getElementById('spectateIdInput');
+        const spectateError = document.getElementById('spectateError');
+        const roomId = spectateIdInput.value.trim();
+        if (!roomId) { spectateError.textContent = 'IDを入力してください。'; return; }
+        database.ref('rooms/' + roomId).once('value', snapshot => {
+            if (!snapshot.val()) { spectateError.textContent = '指定された部屋は存在しないか、終了しています。'; return; }
+            startSpectate(roomId);
+        });
+    });
+
+    prevMoveButton.addEventListener('click', () => { if(historyViewIndex > 0) { historyViewIndex--; displayBoardState(historyViewIndex); } });
+    nextMoveButton.addEventListener('click', () => { if(historyViewIndex < currentMoveHistory.length - 1) { historyViewIndex++; displayBoardState(historyViewIndex); } });
+    
+    function copyRoomId(roomId, event) {
+        const button = event.target;
+        navigator.clipboard.writeText(roomId).then(() => {
+            const originalText = button.textContent;
+            button.textContent = 'コピーしました！';
+            setTimeout(() => { button.textContent = originalText; }, 2000);
+        });
+    }
+
+    leaveButton.addEventListener('click', () => {
+        if (isReplayMode || isSpectatorMode) {
+            window.location.reload(); return;
+        }
+        if (playerRef) playerRef.remove();
+        else if (roomRef) roomRef.remove();
+        window.location.reload();
+    });
+</script>
+
+</body>
+</html>
+
